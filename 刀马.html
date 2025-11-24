@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>假装来电</title>
+    <!-- 引入 Tailwind CSS (样式库) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- 引入 Babel (用于解析 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* 防止手机下拉刷新干扰体验 */
+        body { overscroll-behavior-y: contain; }
+        /* 隐藏滚动条但允许滚动 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 select-none">
+    <div id="root" class="h-screen w-screen overflow-hidden"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 1. 图标组件 (直接内嵌，无需下载依赖) ---
+        const IconBase = ({ children, className, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>{children}</svg>
+        );
+        const Phone = (p) => <IconBase {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></IconBase>;
+        const PhoneIncoming = (p) => <IconBase {...p}><polyline points="16 2 16 8 22 8"/><line x1="23" y1="1" x2="16" y2="8"/><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></IconBase>;
+        const PhoneOff = (p) => <IconBase {...p}><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="1" y1="1" x2="23" y2="23"/></IconBase>;
+        const Settings = (p) => <IconBase {...p}><path d="M12.22 2h-.44a2 2 0 0 1-2-1.57 11.76 11.76 0 0 0-4.63 1.94 2 2 0 0 1-2.45.69l-.39-.14a2 2 0 0 0-2.58 1.49 11.76 11.76 0 0 0 0 5.16 2 2 0 0 0 2.58 1.49l.39-.14a2 2 0 0 1 2.45.69 11.76 11.76 0 0 0 4.63 1.94 2 2 0 0 1 2 1.57h.44a2 2 0 0 1 2-1.57 11.76 11.76 0 0 0 4.63-1.94 2 2 0 0 1 2.45-.69l.39.14a2 2 0 0 0 2.58-1.49 11.76 11.76 0 0 0 0-5.16 2 2 0 0 0-2.58-1.49l-.39.14a2 2 0 0 1-2.45-.69 11.76 11.76 0 0 0-4.63-1.94 2 2 0 0 1-2-1.57z"/><circle cx="12" cy="12" r="3"/></IconBase>;
+        const Mic = (p) => <IconBase {...p}><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></IconBase>;
+        const User = (p) => <IconBase {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconBase>;
+        const Clock = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></IconBase>;
+        const Volume2 = (p) => <IconBase {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></IconBase>;
+        const Volume1 = (p) => <IconBase {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></IconBase>;
+        const Ghost = (p) => <IconBase {...p}><path d="M9 22l1-2.5 2.5 1 2.5-1 2.5 1 1-2.5a6 6 0 0 0-6-6v-1a2 2 0 0 0-4 0v1a6 6 0 0 0-6 6l1 2.5z"/><path d="M9 14h.01"/><path d="M15 14h.01"/></IconBase>;
+        const HelpCircle = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconBase>;
+        const AlertTriangle = (p) => <IconBase {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconBase>;
+        const Video = (p) => <IconBase {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></IconBase>;
+        const MessageSquare = (p) => <IconBase {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></IconBase>;
+        const Play = (p) => <IconBase {...p}><polygon points="5 3 19 12 5 21 5 3"/></IconBase>;
+        const ChevronRight = (p) => <IconBase {...p}><polyline points="9 18 15 12 9 6"/></IconBase>;
+        const Upload = (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconBase>;
+        const Music = (p) => <IconBase {...p}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></IconBase>;
+        const Cpu = (p) => <IconBase {...p}><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></IconBase>;
+
+        // --- 2. 默认素材与辅助函数 ---
+        const DEFAULT_RINGTONE = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
+        const VOICE_DEFAULT = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"; 
+        const VOICE_BOSS = "https://assets.mixkit.co/active_storage/sfx/2452/2452-preview.mp3"; 
+        const VOICE_MOM = "https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3"; 
+
+        const getAIResponse = (userText, scenario) => {
+            const text = userText.toLowerCase();
+            if (scenario === 'urge') {
+                if (text.includes('喂') || text.includes('谁')) return "喂？是我。你还要多久啊？这边都等着呢。";
+                if (text.includes('马上') || text.includes('一会')) return "哎呀别一会了，老总刚又问了一遍，你赶紧的吧，打车过来。";
+                if (text.includes('什么事') || text.includes('干嘛')) return "还能啥事啊，就那个数据不对，除了你没人知道密码，快点啊。";
+                if (text.includes('好') || text.includes('行')) return "行行行，那你快点，挂了啊。";
+                return "喂？信号好像不太好...总之你快点回来，急死人了。";
+            } else {
+                if (text.includes('喂') || text.includes('谁')) return "喂，你好，外卖到了，给你放外卖柜了啊。";
+                if (text.includes('是') || text.includes('对')) return "对，就是大学城外环西路这边，我看没人在家。"; 
+                if (text.includes('放') || text.includes('门口')) return "行，那我放门口了，你记得拿一下，别丢了。";
+                if (text.includes('谢谢')) return "没事，挂了啊。";
+                return "喂？能听到吗？我说东西给你放楼下了，你自己下来拿一下吧。";
+            }
+        };
+
+        const createPhoneFilter = (audioContext, sourceNode, destinationNode) => {
+            const highPass = audioContext.createBiquadFilter();
+            highPass.type = 'highpass';
+            highPass.frequency.value = 300;
+            const lowPass = audioContext.createBiquadFilter();
+            lowPass.type = 'lowpass';
+            lowPass.frequency.value = 3400;
+            sourceNode.connect(highPass);
+            highPass.connect(lowPass);
+            lowPass.connect(destinationNode);
+            return { highPass, lowPass };
+        };
+
+        // --- 3. 核心组件 ---
+        const Onboarding = ({ onComplete }) => {
+            const [name, setName] = useState('');
+            const [age, setAge] = useState('');
+            const [role, setRole] = useState('');
+
+            const handleComplete = () => {
+                if (name && role) onComplete({ name, age, role });
+                else alert('请填写姓名并选择当前状态');
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center h-full p-8 bg-gradient-to-b from-blue-50 to-white text-gray-800">
+                    <div className="w-20 h-20 bg-blue-500 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-blue-200">
+                        <PhoneIncoming className="w-10 h-10 text-white" />
+                    </div>
+                    <h1 className="text-2xl font-bold mb-2">欢迎使用假装来电</h1>
+                    <p className="text-gray-500 mb-8 text-center text-sm">请完善您的档案以匹配最佳来电场景</p>
+                    <div className="w-full max-w-xs space-y-4">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 ml-1">真实姓名 (用于来电显示)</label>
+                            <input type="text" placeholder="例如：李经理 / 妈妈" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={name} onChange={(e) => setName(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1 ml-1">年龄</label>
+                            <input type="number" placeholder="例如：25" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={age} onChange={(e) => setAge(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-2 ml-1">选择现状 Tag</label>
+                            <div className="flex gap-2">
+                                {['工作', '学生', '居家'].map((tag) => (
+                                    <button key={tag} onClick={() => setRole(tag)} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${role === tag ? 'bg-blue-500 text-white shadow-md shadow-blue-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{tag}</button>
+                                ))}
+                            </div>
+                        </div>
+                        <button onClick={handleComplete} className="w-full mt-8 bg-gray-900 text-white py-4 rounded-xl font-semibold shadow-lg active:scale-95 transition-transform">开始使用</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const WaitingScreen = ({ delay, onTimeout, onCancel }) => {
+            useEffect(() => {
+                const timer = setTimeout(onTimeout, delay * 1000);
+                return () => clearTimeout(timer);
+            }, [delay, onTimeout]);
+            return (
+                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center cursor-pointer" onClick={onCancel}>
+                    <div className="text-gray-900 text-xs select-none">点击屏幕取消等待</div>
+                </div>
+            );
+        };
+
+        const IncomingCall = ({ callerName, onDecline, onAccept, isDark, ringtoneUrl }) => {
+            const audioRef = useRef(null);
+            useEffect(() => {
+                audioRef.current = new Audio(ringtoneUrl || DEFAULT_RINGTONE);
+                audioRef.current.loop = true;
+                audioRef.current.play().catch(e => console.log("Ringtone error:", e));
+                if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]);
+                return () => { if (audioRef.current) audioRef.current.pause(); };
+            }, [ringtoneUrl]);
+
+            return (
+                <div className="fixed inset-0 z-50 flex flex-col bg-gray-900 text-white bg-cover bg-center" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.8)), url("https://images.unsplash.com/photo-1557683316-973673baf926?w=800&q=80")' }}>
+                    <div className="flex-1 flex flex-col items-center pt-20">
+                        <div className="w-24 h-24 bg-gray-300 rounded-full mb-4 flex items-center justify-center text-gray-600 text-3xl font-bold overflow-hidden">{callerName.charAt(0)}</div>
+                        <h2 className="text-3xl font-medium mb-2">{callerName}</h2>
+                        <p className="text-gray-300">手机</p>
+                    </div>
+                    <div className="pb-20 px-10 w-full max-w-md mx-auto">
+                        <div className="flex justify-between items-center mb-16">
+                            <div className="flex flex-col items-center gap-2"><div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center"><Clock className="w-6 h-6" /></div><span className="text-xs text-gray-300">提醒</span></div>
+                            <div className="flex flex-col items-center gap-2"><div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center"><MessageSquare className="w-6 h-6" /></div><span className="text-xs text-gray-300">信息</span></div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <div className="flex flex-col items-center gap-4"><button onClick={onDecline} className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 active:scale-95 transition-transform"><PhoneOff className="w-8 h-8 fill-current" /></button><span className="text-sm font-medium">拒绝</span></div>
+                            <div className="flex flex-col items-center gap-4"><button onClick={onAccept} className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 active:scale-95 transition-transform animate-pulse"><PhoneIncoming className="w-8 h-8 fill-current" /></button><span className="text-sm font-medium">接听</span></div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ActiveCall = ({ callerName, onEnd, showSubtitles, voiceData, scenario }) => {
+            const [seconds, setSeconds] = useState(0);
+            const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+            const [isMuted, setIsMuted] = useState(false);
+            const [aiStatus, setAiStatus] = useState('idle');
+            const [subtitleText, setSubtitleText] = useState('');
+            const audioContextRef = useRef(null);
+            const gainNodeRef = useRef(null);
+            const audioRef = useRef(null);
+            const recognitionRef = useRef(null);
+            const synthRef = useRef(window.speechSynthesis);
+
+            // Audio Context Init
+            useEffect(() => {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    const ctx = new AudioContext();
+                    audioContextRef.current = ctx;
+                    const gainNode = ctx.createGain();
+                    gainNode.volume = isSpeakerOn ? 1.0 : 0.2;
+                    gainNode.connect(ctx.destination);
+                    gainNodeRef.current = gainNode;
+                    
+                    // Noise
+                    try {
+                        const bufferSize = 2 * ctx.sampleRate;
+                        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                        const output = noiseBuffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+                        const noise = ctx.createBufferSource();
+                        noise.buffer = noiseBuffer;
+                        noise.loop = true;
+                        const noiseGain = ctx.createGain();
+                        noiseGain.gain.value = 0.02;
+                        noise.connect(noiseGain);
+                        noiseGain.connect(ctx.destination);
+                        noise.start();
+                    } catch (e) {}
+                }
+                return () => audioContextRef.current?.close();
+            }, []);
+
+            useEffect(() => {
+                if (gainNodeRef.current && audioContextRef.current) {
+                    gainNodeRef.current.gain.setTargetAtTime(isSpeakerOn ? 1.0 : 0.2, audioContextRef.current.currentTime, 0.1);
+                }
+            }, [isSpeakerOn]);
+
+            useEffect(() => {
+                const timer = setInterval(() => setSeconds(s => s + 1), 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // File Playback
+            useEffect(() => {
+                if (!voiceData.isAI && voiceData.url && audioContextRef.current) {
+                    const audioEl = new Audio(voiceData.url);
+                    audioEl.crossOrigin = "anonymous";
+                    audioEl.loop = true;
+                    audioRef.current = audioEl;
+                    const source = audioContextRef.current.createMediaElementSource(audioEl);
+                    createPhoneFilter(audioContextRef.current, source, gainNodeRef.current);
+                    audioEl.play().catch(e => console.log(e));
+                    return () => audioEl.pause();
+                }
+            }, [voiceData]);
+
+            // AI Logic
+            useEffect(() => {
+                if (voiceData.isAI) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    if (SpeechRecognition) {
+                        recognitionRef.current = new SpeechRecognition();
+                        recognitionRef.current.continuous = true;
+                        recognitionRef.current.interimResults = false;
+                        recognitionRef.current.lang = 'zh-CN';
+                        recognitionRef.current.onstart = () => { setAiStatus('listening'); setSubtitleText("(正在听...)"); };
+                        recognitionRef.current.onresult = (e) => {
+                            const text = e.results[e.results.length - 1][0].transcript;
+                            setSubtitleText(`我: ${text}`);
+                            handleAIResponse(text);
+                        };
+                        try { recognitionRef.current.start(); } catch(e) {}
+                        setTimeout(() => handleAISpeak(scenario === 'urge' ? "喂？咋回事啊还没到？" : "喂？你好，外卖到了啊。"), 1200);
+                    }
+                    return () => { recognitionRef.current?.stop(); synthRef.current?.cancel(); };
+                }
+            }, [voiceData, scenario]);
+
+            const handleAIResponse = (userText) => {
+                setAiStatus('thinking');
+                setTimeout(() => handleAISpeak(getAIResponse(userText, scenario)), 800);
+            };
+
+            const handleAISpeak = (text) => {
+                if (!synthRef.current) return;
+                synthRef.current.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN';
+                utterance.rate = 1.2;
+                utterance.onstart = () => { setAiStatus('speaking'); setSubtitleText(`对方: ${text}`); };
+                utterance.onend = () => setAiStatus('listening');
+                synthRef.current.speak(utterance);
+            };
+
+            const formatTime = (s) => {
+                const mins = Math.floor(s / 60).toString().padStart(2, '0');
+                const secs = (s % 60).toString().padStart(2, '0');
+                return `${mins}:${secs}`;
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex flex-col bg-gray-900 text-white">
+                    <div className={`absolute inset-0 ${showSubtitles ? 'bg-black' : 'bg-gray-800'}`}>
+                        {!showSubtitles && <div className="absolute inset-0 opacity-30 bg-gradient-to-b from-gray-700 to-black"></div>}
+                    </div>
+                    <div className="relative flex-1 flex flex-col items-center pt-20 z-10">
+                        <h2 className="text-3xl font-medium mb-2">{callerName}</h2>
+                        <p className="text-gray-300 mb-8">{formatTime(seconds)}</p>
+                        {!showSubtitles && voiceData.isAI && (
+                            <div className="mb-8 flex flex-col items-center h-12 justify-center">
+                                {aiStatus === 'listening' && <div className="flex gap-1 items-end h-8"><div className="w-1 bg-green-400 animate-[bounce_1s_infinite] h-2"></div><div className="w-1 bg-green-400 animate-[bounce_1.2s_infinite] h-4"></div><div className="w-1 bg-green-400 animate-[bounce_0.8s_infinite] h-3"></div></div>}
+                                {aiStatus === 'speaking' && <div className="w-8 h-8 rounded-full bg-blue-500 animate-ping opacity-75"></div>}
+                                <p className="text-xs text-gray-400 mt-2">{aiStatus === 'listening' ? "AI 正在听..." : aiStatus === 'speaking' ? "对方正在说话" : "..."}</p>
+                            </div>
+                        )}
+                        {showSubtitles ? (
+                            <div className="w-full px-8 mt-8"><div className="bg-black/50 backdrop-blur-sm p-4 rounded-xl border border-white/10 min-h-[150px]"><p className="text-yellow-400 text-sm mb-2">{voiceData.isAI ? "AI 实时对话模式 (隐私保护)" : "字幕模式 (隐私保护)"}</p><p className="text-lg leading-relaxed animate-pulse">{voiceData.isAI ? (subtitleText || "通话建立中...") : '... (对方正在说话) ...'}</p></div></div>
+                        ) : (
+                            <div className="grid grid-cols-3 gap-6 px-10 w-full max-w-md mt-8">
+                                <div className="flex flex-col items-center gap-2"><button onClick={() => setIsMuted(!isMuted)} className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${isMuted ? 'bg-white text-gray-900' : 'bg-white/10 text-white hover:bg-white/20'}`}><Mic className={`w-7 h-7 ${isMuted ? 'fill-current' : ''}`} /></button><span className="text-xs">静音</span></div>
+                                <div className="flex flex-col items-center gap-2"><div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"><div className="grid grid-cols-3 gap-1 p-3">{[...Array(9)].map((_, i) => <div key={i} className="w-1 h-1 bg-white rounded-full"></div>)}</div></div><span className="text-xs">拨号键盘</span></div>
+                                <div className="flex flex-col items-center gap-2"><button onClick={() => setIsSpeakerOn(!isSpeakerOn)} className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${isSpeakerOn ? 'bg-white text-gray-900' : 'bg-white/10 text-white hover:bg-white/20'}`}>{isSpeakerOn ? <Volume2 className="w-7 h-7 fill-current" /> : <Volume1 className="w-7 h-7" />}</button><span className="text-xs">{isSpeakerOn ? '免提' : '听筒'}</span></div>
+                                <div className="flex flex-col items-center gap-2"><div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div><span className="text-xs">添加通话</span></div>
+                                <div className="flex flex-col items-center gap-2"><div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"><Video className="w-7 h-7" /></div><span className="text-xs">视频</span></div>
+                                <div className="flex flex-col items-center gap-2"><div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"><User className="w-7 h-7" /></div><span className="text-xs">通讯录</span></div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="relative pb-20 px-10 flex justify-center z-10 mt-auto"><button onClick={onEnd} className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 active:scale-95 transition-transform"><PhoneOff className="w-9 h-9 fill-current" /></button></div>
+                </div>
+            );
+        };
+
+        // --- 4. 主应用逻辑 ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [activeTab, setActiveTab] = useState('home');
+            const [callStatus, setCallStatus] = useState('idle'); 
+            const [darkMode, setDarkMode] = useState(false);
+            const [delay, setDelay] = useState(5);
+            const [callerName, setCallerName] = useState('李经理');
+            const [useSubtitles, setUseSubtitles] = useState(false);
+            const [scenario, setScenario] = useState('urge');
+            const [ringtone, setRingtone] = useState(DEFAULT_RINGTONE);
+            const [customRingtoneName, setCustomRingtoneName] = useState('');
+            const [selectedVoice, setSelectedVoice] = useState({ id: 'default', name: '默认 - 办公室背景', url: VOICE_DEFAULT, isAI: false });
+            const [customVoices, setCustomVoices] = useState([]);
+            
+            const fileInputRef = useRef(null);
+            const ringtoneInputRef = useRef(null);
+
+            useEffect(() => { if (user) setCallerName(user.name || '未知来电'); }, [user]);
+
+            const startCallTimer = () => setCallStatus('waiting');
+
+            const handleVoiceUpload = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const url = URL.createObjectURL(file);
+                    const newVoice = { id: `custom-${Date.now()}`, name: `自定义: ${file.name}`, url: url, isAI: false };
+                    setCustomVoices([...customVoices, newVoice]);
+                    setSelectedVoice(newVoice);
+                }
+            };
+
+            const handleRingtoneUpload = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const url = URL.createObjectURL(file);
+                    setRingtone(url);
+                    setCustomRingtoneName(file.name);
+                }
+            };
+
+            const presetVoices = [
+                { id: 'default', name: '默认 - 办公室背景', url: VOICE_DEFAULT, isAI: false },
+                { id: 'boss', name: '严厉老板 - "怎么还没到？"', url: VOICE_BOSS, isAI: false },
+                { id: 'mom', name: '慈祥妈妈 - "回家吃饭吗"', url: VOICE_MOM, isAI: false },
+                { id: 'ai-agent', name: 'AI 智能助手 (实时互动)', url: null, isAI: true },
+            ];
+            const allVoices = [...presetVoices, ...customVoices];
+
+            const renderTabContent = () => {
+                if (activeTab === 'home') return (
+                    <div className="space-y-6 pb-24">
+                        <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} p-6 rounded-2xl shadow-sm`}>
+                            <div className="flex justify-between items-start mb-4"><div><h2 className="text-xl font-bold">场景选择</h2><p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>当前身份: {user?.role || '未设置'}</p></div><span className={`px-3 py-1 rounded-full text-xs font-medium ${scenario === 'urge' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{scenario === 'urge' ? '催促模式' : '询问模式'}</span></div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => setScenario('urge')} className={`p-4 rounded-xl text-left transition-all border-2 ${scenario === 'urge' ? 'border-red-500 bg-red-50' : 'border-transparent bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600'}`}><AlertTriangle className={`w-6 h-6 mb-2 ${scenario === 'urge' ? 'text-red-500' : 'text-gray-400'}`} /><span className={`block font-medium ${scenario === 'urge' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>催促离场</span><span className="text-xs text-gray-400">紧急会议、家中有事</span></button>
+                                <button onClick={() => setScenario('inquiry')} className={`p-4 rounded-xl text-left transition-all border-2 ${scenario === 'inquiry' ? 'border-blue-500 bg-blue-50' : 'border-transparent bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600'}`}><HelpCircle className={`w-6 h-6 mb-2 ${scenario === 'inquiry' ? 'text-blue-500' : 'text-gray-400'}`} /><span className={`block font-medium ${scenario === 'inquiry' ? 'text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>日常询问</span><span className="text-xs text-gray-400">外卖到了、快递取件</span></button>
+                            </div>
+                        </div>
+                        <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} p-6 rounded-2xl shadow-sm`}>
+                            <h3 className="font-bold mb-4">快捷设置</h3>
+                            <div className="space-y-4">
+                                <div><div className="flex justify-between mb-2"><span className="text-sm font-medium">预设来电时间</span><span className="text-sm text-blue-500 font-bold">{delay} 秒</span></div><input type="range" min="3" max="60" value={delay} onChange={(e) => setDelay(e.target.value)} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500" /><div className="flex justify-between text-xs text-gray-400 mt-1"><span>3s</span><span>30s</span><span>60s</span></div></div>
+                                <div className="flex items-center justify-between py-2 border-t border-gray-100 dark:border-gray-700" onClick={() => setActiveTab('voice')}><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><Mic size={16} /></div><div className="flex flex-col"><span className="text-sm font-medium">音色选择</span><span className="text-xs text-gray-500">当前: {selectedVoice.name.split('-')[0]}</span></div></div><ChevronRight size={16} className="text-gray-400" /></div>
+                                <div className="flex items-center justify-between py-2 border-t border-gray-100 dark:border-gray-700" onClick={() => setActiveTab('settings')}><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><Music size={16} /></div><div className="flex flex-col"><span className="text-sm font-medium">来电铃声</span><span className="text-xs text-gray-500">{customRingtoneName ? '自定义' : '默认 (iPhone)'}</span></div></div><ChevronRight size={16} className="text-gray-400" /></div>
+                            </div>
+                        </div>
+                        <button onClick={startCallTimer} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"><Clock className="w-5 h-5" />开始倒计时</button>
+                        <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg flex items-start gap-3"><AlertTriangle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" /><p className="text-xs text-orange-700 leading-tight">安全提醒: 本App仅用于娱乐或脱身。在真正遇到危险时，请务必立刻报警或联系家人，不要依赖此应用。</p></div>
+                    </div>
+                );
+
+                if (activeTab === 'voice') return (
+                    <div className="space-y-4 pb-24">
+                        <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} p-6 rounded-2xl shadow-sm`}>
+                            <h2 className="text-xl font-bold mb-4">语音库</h2>
+                            <div className="space-y-3">
+                                {allVoices.map((voice) => (
+                                    <div key={voice.id} onClick={() => setSelectedVoice(voice)} className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors border ${selectedVoice.id === voice.id ? 'bg-blue-50 border-blue-500 dark:bg-blue-900/30 dark:border-blue-400' : 'bg-gray-50 border-transparent dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'}`}>
+                                        <div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedVoice.id === voice.id ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500 dark:bg-gray-600 dark:text-gray-300'}`}>{voice.isAI ? <Cpu size={14} /> : <Play size={14} fill="currentColor" />}</div><span className="text-sm font-medium">{voice.name}</span></div>
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedVoice.id === voice.id ? 'border-blue-500' : 'border-gray-300'}`}>{selectedVoice.id === voice.id && <div className="w-3 h-3 bg-blue-500 rounded-full" />}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={handleVoiceUpload} />
+                            <button onClick={() => fileInputRef.current.click()} className="w-full mt-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 text-sm font-medium flex items-center justify-center gap-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors"><Upload size={16} />上传自定义语音</button>
+                        </div>
+                    </div>
+                );
+
+                if (activeTab === 'settings') return (
+                    <div className="space-y-4 pb-24">
+                        <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} p-6 rounded-2xl shadow-sm`}>
+                            <h2 className="text-xl font-bold mb-6">基础设置</h2>
+                            <div className="mb-6"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">来电铃声</h3><div className="space-y-2"><div onClick={() => { setRingtone(DEFAULT_RINGTONE); setCustomRingtoneName(''); }} className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border ${!customRingtoneName ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-100 dark:border-gray-700'}`}><span className="text-sm font-medium">默认 (iPhone 风格)</span>{!customRingtoneName && <div className="w-2 h-2 bg-green-500 rounded-full"></div>}</div><input type="file" ref={ringtoneInputRef} className="hidden" accept="audio/*" onChange={handleRingtoneUpload} /><div onClick={() => ringtoneInputRef.current.click()} className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border ${customRingtoneName ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-100 dark:border-gray-700'}`}><div className="flex flex-col"><span className="text-sm font-medium">自定义铃声</span>{customRingtoneName && <span className="text-xs text-green-600">{customRingtoneName}</span>}</div>{customRingtoneName ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <Upload size={14} className="text-gray-400"/>}</div></div></div>
+                            <div className="mb-6"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">来电提醒</h3><div className="space-y-4"><div className="flex items-center justify-between"><span className="text-sm font-medium">震动反馈</span><div className="w-11 h-6 bg-green-500 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm"></div></div></div></div></div>
+                            <div className="mb-6"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">界面显示</h3><div className="space-y-4"><div className="flex items-center justify-between"><span className="text-sm font-medium">深色模式</span><button onClick={() => setDarkMode(!darkMode)} className={`w-11 h-6 rounded-full relative transition-colors ${darkMode ? 'bg-green-500' : 'bg-gray-200'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${darkMode ? 'right-1' : 'left-1'}`}></div></button></div><div className="flex items-center justify-between"><div className="flex flex-col"><span className="text-sm font-medium">有字幕版本 (隐私模式)</span><span className="text-xs text-gray-500">他人不可视屏幕通话状态</span></div><button onClick={() => setUseSubtitles(!useSubtitles)} className={`w-11 h-6 rounded-full relative transition-colors ${useSubtitles ? 'bg-green-500' : 'bg-gray-200'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${useSubtitles ? 'right-1' : 'left-1'}`}></div></button></div></div></div>
+                            <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">关于</h3><div className="space-y-2 text-sm text-gray-600 dark:text-gray-300"><p className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">帮助与使用规则 <ChevronRight size={14}/></p><p className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">隐私政策 <ChevronRight size={14}/></p><p className="flex items-center justify-between py-2">用户协议 <ChevronRight size={14}/></p></div></div>
+                        </div>
+                        <button onClick={() => { setUser(null); setCallStatus('idle'); }} className="w-full py-3 text-red-500 font-medium bg-red-50 rounded-xl">退出登录 / 重置数据</button>
+                    </div>
+                );
+            };
+
+            if (!user) return <Onboarding onComplete={setUser} />;
+            if (callStatus === 'waiting') return <WaitingScreen delay={delay} onTimeout={() => setCallStatus('incoming')} onCancel={() => setCallStatus('idle')} />;
+            if (callStatus === 'incoming') return <IncomingCall callerName={callerName} onDecline={() => setCallStatus('idle')} onAccept={() => setCallStatus('active')} isDark={darkMode} ringtoneUrl={ringtone} />;
+            if (callStatus === 'active') return <ActiveCall callerName={callerName} onEnd={() => setCallStatus('idle')} showSubtitles={useSubtitles} voiceData={selectedVoice} scenario={scenario} />;
+
+            return (
+                <div className={`min-h-screen flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-gray-100'} transition-colors duration-300`}>
+                    <header className={`${darkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-200'} px-6 py-4 flex items-center justify-between sticky top-0 z-20 border-b shadow-sm`}>
+                        <div><h1 className="text-lg font-bold">假装来电</h1><p className="text-xs opacity-60">v2.5 - Audio Enhanced</p></div>
+                        <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-600 font-bold text-xs">{user.name.charAt(0)}</div>
+                    </header>
+                    <main className="flex-1 p-4 overflow-y-auto max-w-md mx-auto w-full">{renderTabContent()}</main>
+                    <nav className={`${darkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-white border-gray-200 text-gray-500'} fixed bottom-0 left-0 right-0 border-t pb-safe flex justify-around items-center h-16 z-30 max-w-md mx-auto`}>
+                        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 ${activeTab === 'home' ? 'text-blue-500' : ''}`}><Phone size={20} fill={activeTab === 'home' ? 'currentColor' : 'none'} /><span className="text-[10px] font-medium">首页</span></button>
+                        <button onClick={() => setActiveTab('voice')} className={`flex flex-col items-center gap-1 ${activeTab === 'voice' ? 'text-blue-500' : ''}`}><Mic size={20} fill={activeTab === 'voice' ? 'currentColor' : 'none'} /><span className="text-[10px] font-medium">语音库</span></button>
+                        <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-blue-500' : ''}`}><Settings size={20} fill={activeTab === 'settings' ? 'currentColor' : 'none'} /><span className="text-[10px] font-medium">设置</span></button>
+                    </nav>
+                    <style>{`.pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }`}</style>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
